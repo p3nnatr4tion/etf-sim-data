@@ -34,6 +34,17 @@ jobs:
           ALPHAVANTAGE_KEY: ${{ secrets.ALPHAVANTAGE_KEY }}
           STOOQ_APIKEY: ${{ secrets.STOOQ_APIKEY }}
         run: python scripts/fetch.py
+      - name: Cek kesehatan semua penyedia (sekali sehari)
+        continue-on-error: true
+        env:
+          ALPHAVANTAGE_KEY: ${{ secrets.ALPHAVANTAGE_KEY }}
+          STOOQ_APIKEY: ${{ secrets.STOOQ_APIKEY }}
+        run: |
+          if [ "${{ github.event_name }}" != "schedule" ] || [ "$(date -u +%H)" = "00" ] || [ "$(date -u +%u)" -ge 6 ]; then
+            python scripts/fetch.py --probe >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "Lewati cek kesehatan (hanya jam 00 UTC, akhir pekan, atau run manual)."
+          fi
       - name: Commit bila berubah
         run: |
           git config user.name "github-actions[bot]"

@@ -307,5 +307,37 @@ def main() -> int:
     return 0
 
 
+def probe() -> int:
+    """Uji SEMUA penyedia (bukan hanya sampai yang pertama berhasil) lalu tulis
+    laporan kesehatan ke data/health.json dan ringkasan Markdown ke stdout."""
+    t0 = now_utc()
+    rows, report = [], {"checkedAt": iso(t0), "price": {}, "fx": {}}
+    for t in ETFS:
+        report["price"][t] = {}
+        for name, fn in PRICE_PROVIDERS:
+            s = time.time()
+            try:
+                q = fn(t)
+                validate_quote(t, q, t0)
+                r = {"ok": True, "price": q["price"], "asOf": q["asOf"]}
+            except Exception as e:  # noqa: BLE001
+                r = {"ok": False, "err": str(e)[:120]}
+            r["ms"] = int((time.time() - s) * 1000)
+            report["price"][t][name] = r
+            rows.append(f"| {t} | {name} | {'OK' if r['ok'] else 'GAGAL'} | {r.get('price', '')} | {r['ms']} | {r.get('err', '')} |")
+    for name, fn in FX_PROVIDERS:
+        s = time.time()
+        try:
+            r = {"ok": True, "rate": round(fn(), 2)}
+        except Exception as e:  # noqa: BLE001
+            r = {"ok": False, "err": str(e)[:120]}
+        r["ms"] = int((time.time() - s) * 1000)
+        report["fx"][name] = r
+        rows.append(f"| USD/IDR | {name} | {'OK' if r['ok'] else 'GAGAL'} | {r.get('rate', '')} | {r['ms']} | {r.get('err', '')} |")
+    (ROOT / "data" / "health.json").write_text(json.dumps(report, separators=(",", ":")))
+    print("| Data | Penyedia | Status | Nilai | ms | Catatan |\n|---|---|---|---|---|---|\n" + "\n".join(rows))
+    return 0
+
+
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(probe() if "--probe" in sys.argv else main())
