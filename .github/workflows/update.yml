@@ -5,6 +5,9 @@ on:
     - cron: "23 * * * 1-5"   # tiap jam, Senin-Jumat (UTC)
     - cron: "23 6 * * 0,6"   # sekali sehari di akhir pekan
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ["scripts/**", "tests/**", ".github/workflows/**", "requirements.txt"]
 
 permissions:
   contents: write
