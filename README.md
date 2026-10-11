@@ -8,7 +8,7 @@ dan meng-commit hasilnya ke `data/latest.json`.
 
 | Data | Rantai penyedia (urut) | Aturan |
 |---|---|---|
-| Harga ETF | yfinance → Stooq → Alpha Vantage (opsional, butuh secret `ALPHAVANTAGE_KEY`) | Penyedia pertama yang lolos validasi dipakai |
+| Harga ETF | yfinance → endpoint chart Yahoo langsung → nasdaq.com (ETF AS) → Stooq (butuh secret `STOOQ_APIKEY`) → Alpha Vantage (butuh secret `ALPHAVANTAGE_KEY`) | Penyedia pertama yang lolos validasi dipakai |
 | Kurs USD/IDR | open.er-api.com, currency-api (jsDelivr + Cloudflare Pages), Frankfurter, Yahoo `IDR=X` | Semua dicoba, dipakai **median**; sumber yang menyimpang >2% dibuang |
 
 Validasi: kisaran harga wajar per ETF (menangkap salah satuan pence), perubahan harian maks ±25%,
@@ -20,6 +20,8 @@ sehingga data bagus tidak pernah tertimpa data buruk. Detail tiap percobaan ada 
 1. `https://raw.githubusercontent.com/p3nnatr4tion/etf-sim-data/main/data/latest.json` (cache ±5 menit)
 2. `https://p3nnatr4tion.github.io/etf-sim-data/data/latest.json` (bila GitHub Pages aktif)
 3. `https://cdn.jsdelivr.net/gh/p3nnatr4tion/etf-sim-data@main/data/latest.json` (di-purge tiap update)
+
+Laporan kesehatan semua penyedia ada di `data/health.json` dan ringkasan tiap run di tab Actions (diperbarui sekali sehari).
 
 Riwayat harian ringkas tersimpan di `data/daily/YYYY-MM-DD.json`.
 

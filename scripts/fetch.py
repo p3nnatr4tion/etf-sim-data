@@ -213,7 +213,58 @@ def prov_alphavantage(t: str) -> dict:
     return with_retry(go, tries=2)
 
 
-PRICE_PROVIDERS = [("yahoo", prov_yahoo), ("stooq", prov_stooq), ("alphavantage", prov_alphavantage)]
+def prov_yahoo_chart(t: str) -> dict:
+    """Endpoint chart Yahoo langsung (tanpa library yfinance). Berguna saat yfinance
+    rusak karena perubahan crumb/cookie, kasus kegagalan yang paling sering."""
+    def go():
+        last = None
+        for host in ("query2", "query1"):
+            try:
+                j = requests.get(f"https://{host}.finance.yahoo.com/v8/finance/chart/{ETFS[t]['yahoo']}",
+                                 params={"range": "6y", "interval": "1d", "includeAdjustedClose": "true", "events": "div,split"},
+                                 headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36"},
+                                 timeout=TIMEOUT)
+                if j.status_code != 200:
+                    raise RuntimeError(f"HTTP {j.status_code}")
+                r = j.json()["chart"]["result"][0]
+                if r["meta"].get("currency") not in (None, "USD"):
+                    raise RuntimeError(f"mata uang {r['meta'].get('currency')}")
+                ts, q = r["timestamp"], r["indicators"]["quote"][0]["close"]
+                adj = (r["indicators"].get("adjclose") or [{}])[0].get("adjclose") or q
+                rows = [(datetime.fromtimestamp(a, timezone.utc).strftime("%Y-%m-%d"), c, d) for a, c, d in zip(ts, q, adj) if c is not None and d is not None]
+                dedup = {}
+                for d, c, a in rows:
+                    dedup[d] = (c, a)
+                ds = sorted(dedup)
+                return derive(ds, [dedup[d][0] for d in ds], [dedup[d][1] for d in ds])
+            except Exception as e:  # noqa: BLE001
+                last = e
+        raise last
+    return with_retry(go, tries=2)
+
+
+def prov_nasdaq(t: str) -> dict:
+    """API publik nasdaq.com (hanya ETF AS). Harga penutupan tanpa penyesuaian dividen."""
+    if ETFS[t]["yahoo"].endswith(".L"):
+        raise RuntimeError("nasdaq.com tidak mencakup bursa London (dilewati)")
+
+    def go():
+        end = now_utc().date()
+        r = requests.get(f"https://api.nasdaq.com/api/quote/{t}/historical",
+                         params={"assetclass": "etf", "fromdate": (end - timedelta(days=6 * 366)).isoformat(), "todate": end.isoformat(), "limit": 9999},
+                         headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/126.0 Safari/537.36", "Accept": "application/json"},
+                         timeout=TIMEOUT)
+        if r.status_code != 200:
+            raise RuntimeError(f"HTTP {r.status_code}")
+        rows = (((r.json() or {}).get("data") or {}).get("tradesTable") or {}).get("rows") or []
+        if not rows:
+            raise RuntimeError("nasdaq.com tanpa data")
+        pts = sorted((datetime.strptime(x["date"], "%m/%d/%Y").strftime("%Y-%m-%d"), float(x["close"].replace("$", "").replace(",", ""))) for x in rows)
+        return derive([d for d, _ in pts], [c for _, c in pts])
+    return with_retry(go, tries=2)
+
+
+PRICE_PROVIDERS = [("yahoo", prov_yahoo), ("yahoo-chart", prov_yahoo_chart), ("nasdaq", prov_nasdaq), ("stooq", prov_stooq), ("alphavantage", prov_alphavantage)]
 
 
 # ---------------------------------------------------------------- penyedia kurs
