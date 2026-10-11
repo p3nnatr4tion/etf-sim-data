@@ -1,0 +1,44 @@
+name: Update feed
+
+on:
+  schedule:
+    - cron: "23 * * * 1-5"   # tiap jam, Senin-Jumat (UTC)
+    - cron: "23 6 * * 0,6"   # sekali sehari di akhir pekan
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: feed
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: Tes logika
+        run: python -m pytest -q tests
+      - name: Ambil data
+        env:
+          ALPHAVANTAGE_KEY: ${{ secrets.ALPHAVANTAGE_KEY }}
+          STOOQ_APIKEY: ${{ secrets.STOOQ_APIKEY }}
+        run: python scripts/fetch.py
+      - name: Commit bila berubah
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data
+          if git diff --cached --quiet; then echo "Tidak ada perubahan"; exit 0; fi
+          git commit -m "data: $(date -u +%Y-%m-%dT%H:%MZ)"
+          for i in 1 2 3; do git pull --rebase && git push && break; sleep 5; done
+      - name: Bersihkan cache jsDelivr
+        if: always()
+        run: curl -fsS "https://purge.jsdelivr.net/gh/${{ github.repository }}@main/data/latest.json" || true
